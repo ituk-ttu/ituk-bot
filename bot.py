@@ -1,40 +1,80 @@
 import os
-from telegram.ext import Updater, CommandHandler
+from telegram.ext import Updater, CommandHandler, CallbackContext
 from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-import pickle
+from google.oauth2 import service_account
+import logging
+import requests
+import re
+
+from telegram.update import Update
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
-def add_to_calender(bot, update, args):
-    print(f"Adding to calendar: ", args)
-    rule = {
-        'scope': {
-            'type': 'user',
-            'value': args,
-        },
-        'role': 'reader'
-    }
-    credentials = None
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            credentials = pickle.load(token)
-        # If there are no (valid) credentials available, let the user log in.
-    if not credentials or not credentials.valid:
-        if credentials and credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
+def add_to_calender(update: Update, context: CallbackContext):
+    print(f"Adding to calendar: ", context.args)
+    if update.effective_chat.id == -386179704 or update.effective_chat.id == 142217903:
+        email = context.args[0]
+        if re.fullmatch(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", email):
+            rule = {
+                'scope': {
+                    'type': 'user',
+                    'value': email,
+                },
+                'role': 'reader'
+            }
+            credentials = service_account.Credentials.from_service_account_file(filename="credentials.json", scopes=SCOPES)
+
+            service = build('calendar', 'v3', credentials=credentials)
+            service.acl().insert(calendarId=os.environ["CALENDAR_KEY"], body=rule).execute()
+
+            context.bot.send_message(update.effective_chat.id, f"Successfully added to calendar email: { context.args[0]}")
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
-            credentials = flow.run_local_server(port=52314)
-        # Save the credentials for the next run
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(credentials, token)
+            context.bot.send_message(update.effective_chat.id, "Email is not valid")
+    else:
+        context.bot.send_message(update.effective_chat.id, "You are not allowed to do it here!")
 
-    service = build('calendar', 'v3', credentials=credentials)
-    service.acl().insert(calendarId=os.environ["CALENDAR_KEY"], body=rule).execute()
+
+def error(update: Update, context: CallbackContext):
+    """Log Errors caused by Updates."""
+    logger.warning('Update "%s" caused error "%s"', update, context.error)
+
+
+def get_food_name(food_item):
+    return food_item["nameEst"]
+
+
+def get_food_price(food_item):
+    return str(food_item["prices"][-1]["priceValue"])
+
+
+def get_provider_name(food_item):
+    return food_item[0]["provider"]["name"]
+
+
+def create_menu_string(provider_id):
+    contents = requests.get(f"https://fuud.raimondlu.me/api/v1/FoodItem/provider/{provider_id}").json()
+
+    if len(contents) == 0:
+        return "No menu found!"
+
+    menu_string = f"Tänane {get_provider_name(contents)} menüü:\n"
+
+    for item in contents:
+        menu_string += get_food_name(item) + " - " + get_food_price(item) + "€\n"
+
+    return menu_string
+
+
+def send_bitstop(update: Update, context: CallbackContext):
+    context.bot.send_message(update.effective_chat.id, create_menu_string(1))
+
+
+def send_daily(update: Update, context: CallbackContext):
+    context.bot.send_message(update.effective_chat.id, create_menu_string(2))
 
 
 def main():
@@ -42,13 +82,15 @@ def main():
     # Make sure to set use_context=True to use the new context based callbacks
     # Post version 12 this will no longer be necessary
 
-    updater = Updater(os.environ["API_KEY"])
+    updater = Updater(os.environ["API_KEY"], use_context=True)
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
 
     # # Add command handler to start the payment invoice
-    dp.add_handler(CommandHandler("addToCalender", add_to_calender, pass_args=True))
-
+    dp.add_handler(CommandHandler("add_to_calendar", add_to_calender, pass_args=True))
+    dp.add_error_handler(error)
+    dp.add_handler(CommandHandler('bitstop', send_bitstop))
+    dp.add_handler(CommandHandler('daily', send_daily))
 
     # Start the Bot
     updater.start_polling()
