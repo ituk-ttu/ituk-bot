@@ -48,11 +48,17 @@ def get_food_name(food_item):
 
 
 def get_food_price(food_item):
-    return str(food_item["prices"][-1]["priceValue"])
+    price_item = food_item["prices"][-1]
+    price = str(price_item["priceValue"]) + "€"
+
+    if price_item["modifierName"]:
+        price += " " + str(price_item["modifierName"])
+
+    return price
 
 
-def get_provider_name(food_item):
-    return food_item[0]["provider"]["name"]
+def get_provider_name(item):
+    return item[0]["provider"]["name"]
 
 
 def create_menu_string(provider_id):
