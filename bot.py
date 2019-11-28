@@ -74,7 +74,7 @@ def create_menu_string(provider_id):
     menu_string = f"Tänane {get_provider_name(contents)} menüü:\n"
 
     for item in contents:
-        menu_string += get_food_name(item) + " - " + get_food_price(item) + "€\n"
+        menu_string += get_food_name(item) + " - " + get_food_price(item) + "\n"
 
     return menu_string
 
