@@ -48,13 +48,17 @@ def get_food_name(food_item):
 
 
 def get_food_price(food_item):
-    price_item = food_item["prices"][-1]
-    price = str(price_item["priceValue"]) + "€"
+    price_arr = []
 
-    if price_item["modifierName"]:
-        price += " " + str(price_item["modifierName"])
+    for price in food_item["prices"]:
+        price_str = ""
+        price_str += str(price["priceValue"]) + "€"
 
-    return price
+        if price["modifierName"]:
+            price_str += " " + str(price["modifierName"])
+        price_arr.append(price_str)
+
+    return ", ".join(price_arr) if price_arr else "No price found!"
 
 
 def get_provider_name(item):
@@ -70,7 +74,7 @@ def create_menu_string(provider_id):
     menu_string = f"Tänane {get_provider_name(contents)} menüü:\n"
 
     for item in contents:
-        menu_string += get_food_name(item) + " - " + get_food_price(item) + "€\n"
+        menu_string += get_food_name(item) + " - " + get_food_price(item) + "\n"
 
     return menu_string
 
